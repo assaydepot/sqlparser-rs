@@ -750,7 +750,6 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         let tok = self.next_token();
-        println!("tok: {:#?}", tok);
         let regular_binary_operator = match &tok {
             Token::Arrow => Some(BinaryOperator::Arrow),
             Token::Spaceship => Some(BinaryOperator::Spaceship),
