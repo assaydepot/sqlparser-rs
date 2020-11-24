@@ -121,7 +121,7 @@ impl<'a> Parser<'a> {
                 return parser.expected("end of statement", parser.peek_token());
             }
 
-            let statement = match parser.parse_statement()?;
+            let statement = parser.parse_statement()?;
             debug!("statement: {:#?}", statement);
             stmts.push(statement);
             expecting_statement_delimiter = true;
