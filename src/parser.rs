@@ -930,7 +930,6 @@ impl<'a> Parser<'a> {
             | Token::RBrace
             | Token::RArrow
             => Ok(0)
-            // other => panic!("no precedence rule for {:#?}", other),
         }
     }
 
