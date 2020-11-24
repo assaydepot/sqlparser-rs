@@ -912,8 +912,25 @@ impl<'a> Parser<'a> {
             Token::DoubleColon => Ok(50),
             Token::Comma
             | Token::RParen
-            | Token::LParen => Ok(0),
-            other => panic!("no precedence rule for {:#?}", other),
+            | Token::LParen
+            | Token::EOF
+            | Token::Number(_,_)
+            | Token::Char(_)
+            | Token::SingleQuotedString(_)
+            | Token::NationalStringLiteral(_)
+            | Token::HexStringLiteral(_)
+            | Token::Whitespace(_)
+            | Token::Period
+            | Token::Colon
+            | Token::SemiColon
+            | Token::Backslash
+            | Token::LBracket
+            | Token::RBracket
+            | Token::LBrace
+            | Token::RBrace
+            | Token::RArrow
+            => Ok(0)
+            // other => panic!("no precedence rule for {:#?}", other),
         }
     }
 
