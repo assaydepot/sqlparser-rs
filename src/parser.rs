@@ -283,20 +283,16 @@ impl<'a> Parser<'a> {
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
-        println!("{:#?}", expr);
         debug!("prefix: {:?}", expr);
         loop {
             let next_precedence = self.get_next_precedence()?;
-            println!("next precedence: {}", next_precedence);
             debug!("next precedence: {:?}", next_precedence);
             if precedence >= next_precedence {
-                println!("breaking because of precedence");
                 break;
             }
 
             expr = self.parse_infix(expr, next_precedence)?;
         }
-        println!("parsing subexpr {:?}", expr);
 
         Ok(expr)
     }
