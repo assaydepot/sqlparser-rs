@@ -73,6 +73,12 @@ fn test_spaceship() {
 }
 
 #[test]
+fn test_arrow() {
+    let arrow = r#"SELECT FILTER("request_ids", ("x") -> ("x" IS NOT NULL)) AS "request_ids" FROM db.table"#;
+    hive().verified_stmt(arrow);
+}
+
+#[test]
 fn parse_with_cte() {
     let with = "WITH a AS (SELECT * FROM table) INSERT INTO TABLE db.table_table PARTITION (a) SELECT * FROM a";
     hive().verified_stmt(with);

@@ -61,8 +61,10 @@ pub enum Token {
     LtEq,
     /// Greater Than Or Equals operator `>=`
     GtEq,
-    /// Spaceship operator <=>
+    /// Spaceship operator `<=>`
     Spaceship,
+    /// Arrow operator `->`
+    Arrow,
     /// Plus operator `+`
     Plus,
     /// Minus operator `-`
@@ -121,6 +123,7 @@ impl fmt::Display for Token {
             Token::Whitespace(ws) => write!(f, "{}", ws),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
+            Token::Arrow => f.write_str("->"),
             Token::Eq => f.write_str("="),
             Token::Neq => f.write_str("<>"),
             Token::Lt => f.write_str("<"),
@@ -401,7 +404,10 @@ impl<'a> Tokenizer<'a> {
                                 s.push(ch);
                             }
                             Ok(Some(Token::Whitespace(Whitespace::SingleLineComment(s))))
-                        }
+                        },
+                        Some('>') => {
+                            self.consume_and_return(chars, Token::Arrow)
+                        },
                         // a regular '-' operator
                         _ => Ok(Some(Token::Minus)),
                     }

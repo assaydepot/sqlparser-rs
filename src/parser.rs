@@ -81,6 +81,7 @@ impl fmt::Display for ParserError {
 
 impl Error for ParserError {}
 
+#[derive(Debug)]
 pub struct Parser<'a> {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
@@ -102,6 +103,7 @@ impl<'a> Parser<'a> {
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
+        debug!("Tokenized streams: '{:#?}'", tokens);
         let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
@@ -119,7 +121,11 @@ impl<'a> Parser<'a> {
                 return parser.expected("end of statement", parser.peek_token());
             }
 
-            let statement = parser.parse_statement()?;
+            let statement = match parser.parse_statement() {
+                Ok(s) => s,
+                Err(e) => panic!("egad {}", e)
+            };
+            debug!("statement: {:#?}", statement);
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
@@ -277,16 +283,21 @@ impl<'a> Parser<'a> {
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
+        println!("{:#?}", expr);
         debug!("prefix: {:?}", expr);
         loop {
             let next_precedence = self.get_next_precedence()?;
+            println!("next precedence: {}", next_precedence);
             debug!("next precedence: {:?}", next_precedence);
             if precedence >= next_precedence {
+                println!("breaking because of precedence");
                 break;
             }
 
             expr = self.parse_infix(expr, next_precedence)?;
         }
+        println!("parsing subexpr {:?}", expr);
+
         Ok(expr)
     }
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
@@ -743,7 +754,9 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         let tok = self.next_token();
+        println!("tok: {:#?}", tok);
         let regular_binary_operator = match &tok {
+            Token::Arrow => Some(BinaryOperator::Arrow),
             Token::Spaceship => Some(BinaryOperator::Spaceship),
             Token::DoubleEq => Some(BinaryOperator::Eq),
             Token::Eq => Some(BinaryOperator::Eq),
@@ -886,6 +899,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(_) => Ok(0),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -893,14 +907,18 @@ impl<'a> Parser<'a> {
             | Token::Gt
             | Token::GtEq
             | Token::DoubleEq
-            | Token::Spaceship => Ok(20),
+            | Token::Spaceship
+            | Token::Arrow => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
-            _ => Ok(0),
+            Token::Comma
+            | Token::RParen
+            | Token::LParen => Ok(0),
+            other => panic!("no precedence rule for {:#?}", other),
         }
     }
 
@@ -2179,7 +2197,6 @@ impl<'a> Parser<'a> {
         };
 
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
-
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
         // otherwise they may be parsed as an alias as part of the `projection`

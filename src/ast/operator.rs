@@ -55,6 +55,7 @@ pub enum BinaryOperator {
     Like,
     NotLike,
     BitwiseOr,
+    Arrow,
     BitwiseAnd,
     BitwiseXor,
 }
@@ -73,6 +74,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::GtEq => ">=",
             BinaryOperator::LtEq => "<=",
             BinaryOperator::Spaceship => "<=>",
+            BinaryOperator::Arrow => "->",
             BinaryOperator::Eq => "=",
             BinaryOperator::NotEq => "<>",
             BinaryOperator::And => "AND",
