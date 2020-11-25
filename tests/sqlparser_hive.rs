@@ -80,7 +80,6 @@ fn test_arrow() {
 
 #[test]
 fn test_complex_join() {
-    simple_logger::SimpleLogger::new().init().unwrap();
     let simpler_join = r#"SELECT * FROM (SELECT * FROM approvals app) app_group LEFT JOIN (SELECT * FROM approvals) app ON ("app_group"."app_id_unique" = "app"."app_id") appr_unique"#;
     hive().verified_stmt(simpler_join);
 }
@@ -90,6 +89,17 @@ fn test_array_of_maps_query() {
     simple_logger::SimpleLogger::new().init().unwrap();
     let array_of_maps_query = r#"SELECT CAST("json_parse"("objects") AS ARRAY(MAP(CHARACTER VARYING,CHARACTER VARYING))) AS "new" FROM gouda"#;
     hive().verified_stmt(array_of_maps_query);
+}
+
+#[test]
+fn test_bad_query() {
+    simple_logger::SimpleLogger::new().init().unwrap();
+
+    let bad_query = r#"SELECT "names"[0] FROM a_table"#;
+
+    hive().verified_stmt(bad_query);
+
+
 }
 
 #[test]

@@ -280,14 +280,19 @@ impl<'a> Parser<'a> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
-        loop {
-            let next_precedence = self.get_next_precedence()?;
-            debug!("next precedence: {:?}", next_precedence);
-            if precedence >= next_precedence {
-                break;
-            }
 
-            expr = self.parse_infix(expr, next_precedence)?;
+        if self.peek_token() == Token::LBracket {
+            expr = self.parse_postfix(expr, 0)?;
+        } else {
+            loop {
+                let next_precedence = self.get_next_precedence()?;
+                debug!("next precedence: {:?}", next_precedence);
+                if precedence >= next_precedence {
+                    break;
+                }
+
+                expr = self.parse_infix(expr, next_precedence)?;
+            }
         }
 
         Ok(expr)
@@ -358,7 +363,7 @@ impl<'a> Parser<'a> {
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
-                    Token::LParen | Token::Period => {
+                    Token::LParen | Token::LBracket | Token::Period => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident()];
                         let mut ends_with_wildcard = false;
                         while self.consume_token(&Token::Period) {
@@ -818,6 +823,21 @@ impl<'a> Parser<'a> {
             // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)
         }
+    }
+
+    pub fn parse_postfix(&mut self, expr: Expr, _next_precedence: u8) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBracket)?;
+
+        let subscript = self.parse_expr()?;
+        debug!("parse_postfix: {:?}", expr);
+
+        self.expect_token(&Token::RBracket)?;
+
+        Ok(Expr::BinaryOp {
+            left: Box::new(expr),
+            op: BinaryOperator::Subscript,
+            right: Box::new(subscript)
+        })
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator

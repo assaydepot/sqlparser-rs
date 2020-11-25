@@ -282,7 +282,13 @@ impl fmt::Display for Expr {
                 low,
                 high
             ),
-            Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Expr::BinaryOp { left, op, right } => {
+                if op == &BinaryOperator::Subscript {
+                    write!(f, "{}[{}]", left, right)
+                } else {
+                    write!(f, "{} {} {}", left, op, right)
+                }
+            },
             Expr::UnaryOp { op, expr } => write!(f, "{} {}", op, expr),
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
