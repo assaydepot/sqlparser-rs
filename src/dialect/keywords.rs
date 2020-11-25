@@ -272,6 +272,7 @@ define_keywords!(
     LOCATION,
     LOWER,
     MANAGEDLOCATION,
+    MAP,
     MATCH,
     MATERIALIZED,
     MAX,

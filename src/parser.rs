@@ -103,7 +103,6 @@ impl<'a> Parser<'a> {
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
-        debug!("Tokenized streams: '{:#?}'", tokens);
         let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
@@ -1905,8 +1904,40 @@ impl<'a> Parser<'a> {
                 Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
-                }
-                _ => {
+                },
+                Keyword::ARRAY => {
+                    debug!("keyword::array");
+                    if self.consume_token(&Token::LParen) {
+                        let inner_type = self.parse_data_type()?;
+                        if self.consume_token(&Token::RParen) {
+                            debug!("array inner type: {:?}", inner_type);
+                            Ok(DataType::Array(Box::new(inner_type)))
+                        } else {
+                            parser_err!("expected )")
+                        }
+                    } else {
+                        parser_err!("expected (")
+                    }
+                },
+                Keyword::MAP => {
+                    if self.consume_token(&Token::LParen) {
+                        let first_type = self.parse_data_type()?;
+                        if self.consume_token(&Token::Comma) {
+                            let second_type = self.parse_data_type()?;
+                            if self.consume_token(&Token::RParen) {
+                                Ok(DataType::Map(Box::new(first_type), Box::new(second_type)))
+                            } else {
+                                parser_err!("expected )")
+                            }
+                        } else {
+                            parser_err!("expected ,")
+                        }
+                    } else {
+                        parser_err!("expected (")
+                    }
+                },
+                kw => {
+                    debug!("parse_data_type fall through, looking for type name related to {:?}", kw);
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
                     Ok(DataType::Custom(type_name))

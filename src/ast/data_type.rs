@@ -69,6 +69,8 @@ pub enum DataType {
     Custom(ObjectName),
     /// Arrays
     Array(Box<DataType>),
+    /// Map
+    Map(Box<DataType>, Box<DataType>)
 }
 
 impl fmt::Display for DataType {
@@ -105,8 +107,9 @@ impl fmt::Display for DataType {
             DataType::Text => write!(f, "TEXT"),
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
-            DataType::Array(ty) => write!(f, "{}[]", ty),
+            DataType::Array(ty) => write!(f, "ARRAY({})", ty),
             DataType::Custom(ty) => write!(f, "{}", ty),
+            DataType::Map(ty1,ty2) => write!(f, "MAP({},{})", ty1, ty2)
         }
     }
 }
