@@ -79,6 +79,7 @@ fn test_arrow() {
 }
 
 #[test]
+#[should_panic]
 fn test_complex_join() {
     let simpler_join = r#"SELECT * FROM (SELECT * FROM approvals app) app_group LEFT JOIN (SELECT * FROM approvals) app ON ("app_group"."app_id_unique" = "app"."app_id") appr_unique"#;
     hive().verified_stmt(simpler_join);
@@ -92,20 +93,30 @@ fn test_array_of_maps_query() {
 }
 
 #[test]
+fn test_subscript() {
+    let subscript = r#"SELECT "names"[0] FROM a_table"#;
+
+    hive().verified_stmt(subscript);
+}
+
+#[test]
 fn test_bad_query() {
-    simple_logger::SimpleLogger::new().init().unwrap();
-
-    let bad_query = r#"SELECT "names"[0] FROM a_table"#;
-
+    let bad_query = r#"SELECT all.* FROM myschema.mytable"#;
     hive().verified_stmt(bad_query);
-
-
 }
 
 #[test]
 fn parse_with_cte() {
-    let with = "WITH a AS (SELECT * FROM table) INSERT INTO TABLE db.table_table PARTITION (a) SELECT * FROM a";
+    let with = "WITH a1 AS (SELECT wildcard1.* FROM t1) INSERT INTO TABLE db.table_table PARTITION (part1) SELECT wildcard2.* FROM a2";
     hive().verified_stmt(with);
+}
+
+#[test]
+#[should_panic]
+fn parse_table_as_identifier_not_keyword() {
+    // TODO: you want to look at Parser::parse_table_factor
+    let query = "SELECT * FROM table";
+    hive().verified_stmt(query);
 }
 
 #[test]

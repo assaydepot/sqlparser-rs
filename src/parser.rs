@@ -310,6 +310,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
+        debug!("tokens:\n{:#?}", &self.tokens[self.index..]);
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -344,7 +345,10 @@ impl<'a> Parser<'a> {
             }
         }));
 
-        let expr = match self.next_token() {
+        let next_token = self.next_token();
+        debug!("howdy, {:?}", next_token);
+
+        let expr = match next_token {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
                     self.prev_token();
@@ -972,6 +976,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn peek_next_is_boundary(&mut self) -> bool {
+        let token = self.tokens.get(self.index);
+        match token {
+            Some(Token::Whitespace(_))
+            | Some(Token::EOF)
+            | Some(Token::RParen)
+            | Some(Token::Comma)
+            | None
+            => true,
+            _ => {
+                debug!("token {:?} is not a boundary", token);
+                false
+            }
+        }
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
@@ -980,7 +1000,9 @@ impl<'a> Parser<'a> {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
                 Some(Token::Whitespace(_)) => continue,
-                token => return token.cloned().unwrap_or(Token::EOF),
+                token => {
+                    return token.cloned().unwrap_or(Token::EOF)
+                },
             }
         }
     }
@@ -1010,13 +1032,24 @@ impl<'a> Parser<'a> {
         parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 
-    /// Look for an expected keyword and consume it if it exists
+    /// Look for an expected keyword and consume it if it exists.
+    /// Requires the keyword is followed by a space.
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
         match self.peek_token() {
             Token::Word(w) if expected == w.keyword => {
+                debug!("parsed keyword: {:?}", w);
                 self.next_token();
-                true
+                // We need to different between `SELECT ALL` and `SELECT all.*` by checking
+                // for a subsequent whitespace
+                if self.peek_next_is_boundary() {
+                    debug!("peek_next_is_boundary true");
+                    true
+                } else {
+                    debug!("peek_next_is_boundary false");
+                    self.prev_token();
+                    false
+                }
             }
             _ => false,
         }
