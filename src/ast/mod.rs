@@ -236,6 +236,7 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    VarArgs(Vec<Ident>)
 }
 
 impl fmt::Display for Expr {
@@ -322,6 +323,9 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::VarArgs(varargs) => {
+                write!(f, "{}", display_comma_separated(&varargs[..]))
+            }
         }
     }
 }

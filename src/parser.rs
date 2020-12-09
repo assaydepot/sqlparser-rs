@@ -310,7 +310,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
-        debug!("tokens:\n{:#?}", &self.tokens[self.index..]);
+        debug!("  parse_prefix");
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -346,53 +346,96 @@ impl<'a> Parser<'a> {
         }));
 
         let next_token = self.next_token();
-        debug!("howdy, {:?}", next_token);
 
         let expr = match next_token {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
+                    debug!("keyword true/false/null");
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
                 }
-                Keyword::CASE => self.parse_case_expr(),
-                Keyword::CAST => self.parse_cast_expr(),
-                Keyword::EXISTS => self.parse_exists_expr(),
-                Keyword::EXTRACT => self.parse_extract_expr(),
-                Keyword::INTERVAL => self.parse_literal_interval(),
-                Keyword::LISTAGG => self.parse_listagg_expr(),
-                Keyword::NOT => Ok(Expr::UnaryOp {
-                    op: UnaryOperator::Not,
-                    expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
-                }),
+                Keyword::CASE => {
+                    debug!("keyword case");
+                    self.parse_case_expr()
+                },
+                Keyword::CAST => {
+                    debug!("keyword cast");
+                    self.parse_cast_expr()
+                },
+                Keyword::EXISTS => {
+                    debug!("keyword exists");
+                    self.parse_exists_expr()
+                },
+                Keyword::EXTRACT => {
+                    debug!("keyword extract");
+                    self.parse_extract_expr()
+                },
+                Keyword::INTERVAL => {
+                    debug!("keyword interval");
+                    self.parse_literal_interval()
+                },
+                Keyword::LISTAGG => {
+                    debug!("keyword listagg");
+                    self.parse_listagg_expr()
+                },
+                Keyword::NOT => {
+                    debug!("keyword not");
+                    Ok(Expr::UnaryOp {
+                        op: UnaryOperator::Not,
+                        expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
+                    })
+                },
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
-                _ => match self.peek_token() {
-                    Token::LParen | Token::LBracket | Token::Period => {
-                        let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        let mut ends_with_wildcard = false;
-                        while self.consume_token(&Token::Period) {
-                            match self.next_token() {
-                                Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mult => {
-                                    ends_with_wildcard = true;
-                                    break;
-                                }
-                                unexpected => {
-                                    return self
-                                        .expected("an identifier or a '*' after '.'", unexpected);
+                _ => {
+                    debug!("fall through");
+                    let peek_token = self.peek_token();
+                    debug!("parse_prefix keyword fallthrough: {:?}", peek_token);
+                    match peek_token {
+                        Token::Comma => {
+                            let mut varargs_parts: Vec<Ident> = vec![w.to_ident()];
+                            while self.consume_token(&Token::Comma) {
+                                match self.next_token() {
+                                    Token::Word(w) => varargs_parts.push(w.to_ident()),
+                                    o => debug!("huh: {:?} (varargs_parts: {:?}", o, varargs_parts)
+                                };
+                                debug!("next while whiling: {:?}", self.peek_token());
+                            }
+                            debug!("done whiling, peek: {:?}", self.peek_token());
+
+                            if varargs_parts.len() == 1 {
+                                Ok(Expr::Identifier(varargs_parts.pop().unwrap()))
+                            } else {
+                                Ok(Expr::VarArgs(varargs_parts))
+                            }
+                        },
+                        Token::LParen | Token::LBracket | Token::Period => {
+                            let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+                            let mut ends_with_wildcard = false;
+                            while self.consume_token(&Token::Period) {
+                                match self.next_token() {
+                                    Token::Word(w) => id_parts.push(w.to_ident()),
+                                    Token::Mult => {
+                                        ends_with_wildcard = true;
+                                        break;
+                                    }
+                                    unexpected => {
+                                        return self
+                                            .expected("an identifier or a '*' after '.'", unexpected);
+                                    }
                                 }
                             }
+                            if ends_with_wildcard {
+                                Ok(Expr::QualifiedWildcard(id_parts))
+                            } else if self.consume_token(&Token::LParen) {
+                                self.prev_token();
+                                self.parse_function(ObjectName(id_parts))
+                            } else {
+                                Ok(Expr::CompoundIdentifier(id_parts))
+                            }
                         }
-                        if ends_with_wildcard {
-                            Ok(Expr::QualifiedWildcard(id_parts))
-                        } else if self.consume_token(&Token::LParen) {
-                            self.prev_token();
-                            self.parse_function(ObjectName(id_parts))
-                        } else {
-                            Ok(Expr::CompoundIdentifier(id_parts))
-                        }
+                        _ => Ok(Expr::Identifier(w.to_ident())),
                     }
-                    _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
             Token::Mult => Ok(Expr::Wildcard),
@@ -424,7 +467,7 @@ impl<'a> Parser<'a> {
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
-            }
+            },
             unexpected => self.expected("an expression:", unexpected),
         }?;
 
@@ -439,9 +482,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        debug!("parsing function");
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?;
+        debug!("  distinct: {:?}", distinct);
         let args = self.parse_optional_args()?;
+        debug!("  args: {:?}", args);
+
         let over = if self.parse_keyword(Keyword::OVER) {
             // TBD: support window names (`OVER mywin`) in place of inline specification
             self.expect_token(&Token::LParen)?;
@@ -1121,7 +1168,9 @@ impl<'a> Parser<'a> {
     /// Consume the next token if it matches the expected token, otherwise return false
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
-        if self.peek_token() == *expected {
+        let peek = self.peek_token();
+        debug!("    consume_token peek: {:#?}", peek);
+        if peek == *expected {
             self.next_token();
             true
         } else {
@@ -1989,11 +2038,15 @@ impl<'a> Parser<'a> {
                         parser_err!("expected (")
                     }
                 },
-                kw => {
-                    debug!("parse_data_type fall through, looking for type name related to {:?}", kw);
+                _kw => {
                     self.prev_token();
-                    let type_name = self.parse_object_name()?;
-                    Ok(DataType::Custom(type_name))
+                    let mut commas_separated = self.parse_comma_separated(Parser::parse_object_name)?;
+
+                    if commas_separated.len() == 1 {
+                        Ok(DataType::Custom(commas_separated.pop().unwrap()))
+                    } else {
+                        Ok(DataType::CustomVarArgs(commas_separated))
+                    }
                 }
             },
             unexpected => self.expected("a data type name", unexpected),
@@ -2744,6 +2797,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_optional_args(&mut self) -> Result<Vec<FunctionArg>, ParserError> {
+        debug!("parse optional args");
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {

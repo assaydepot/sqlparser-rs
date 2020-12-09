@@ -67,6 +67,8 @@ pub enum DataType {
     Bytea,
     /// Custom type such as enums
     Custom(ObjectName),
+    /// Custom type as function args
+    CustomVarArgs(Vec<ObjectName>),
     /// Arrays
     Array(Box<DataType>),
     /// Map
@@ -109,6 +111,12 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => write!(f, "ARRAY({})", ty),
             DataType::Custom(ty) => write!(f, "{}", ty),
+            DataType::CustomVarArgs(tys) => {
+                for ty in tys {
+                    write!(f, "{}", ty)?
+                };
+                Ok(())
+            },
             DataType::Map(ty1,ty2) => write!(f, "MAP({},{})", ty1, ty2)
         }
     }

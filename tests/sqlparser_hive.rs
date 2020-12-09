@@ -15,8 +15,12 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use sqlparser::ast::FunctionArg::Unnamed;
+use sqlparser::ast::{BinaryOperator, Expr, Function, Ident, ObjectName};
 use sqlparser::dialect::HiveDialect;
+use sqlparser::parser::Parser;
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 #[test]
 fn parse_table_create() {
@@ -74,8 +78,116 @@ fn test_spaceship() {
 
 #[test]
 fn test_arrow() {
+    // simple_logger::SimpleLogger::new().init().unwrap();
     let arrow = r#"SELECT FILTER("request_ids", ("x") -> ("x" IS NOT NULL)) AS "request_ids" FROM db.table"#;
+    let mut tokens = Tokenizer::new(&HiveDialect {}, arrow);
+    let mut parser = Parser::new(tokens.tokenize().unwrap(), &HiveDialect {});
+    parser.parse_select_item().unwrap();
     hive().verified_stmt(arrow);
+}
+
+#[test]
+fn test_parse_tuple_item() {
+    // simple_logger::SimpleLogger::new().init().unwrap();
+    let arrow = r#"("x", "y", "z")"#;
+    let mut tokens = Tokenizer::new(&HiveDialect {}, arrow);
+    let mut parser = Parser::new(tokens.tokenize().unwrap(), &HiveDialect {});
+    let parsed = parser.parse_expr().unwrap();
+    assert_eq!(
+        parsed,
+        Expr::Nested(Box::new(Expr::VarArgs(
+            ["x", "y", "z"]
+                .iter()
+                .map(|x| { Ident::with_quote('"', *x) })
+                .collect()
+        )))
+    );
+    assert_eq!(parser.next_token(), Token::EOF);
+}
+
+#[test]
+fn test_parse_simple_closure_expr() {
+    // simple_logger::SimpleLogger::new().init().unwrap();
+    let arrow = r#""x" -> "x""#;
+    let mut tokens = Tokenizer::new(&HiveDialect {}, arrow);
+    let mut parser = Parser::new(tokens.tokenize().unwrap(), &HiveDialect {});
+    let parsed = parser.parse_expr().unwrap();
+    assert_eq!(
+        parsed,
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::with_quote('"', "x"))),
+            op: BinaryOperator::Arrow,
+            right: Box::new(Expr::Identifier(Ident::with_quote('"', "x")))
+        }
+    );
+    assert_eq!(parser.next_token(), Token::EOF);
+
+    let arrow = r#"SELECT "x" -> "y" FROM db.table WHERE a <=> b"#;
+    hive().verified_stmt(arrow);
+}
+
+#[test]
+fn test_parse_fancy_closure_expr() {
+    simple_logger::SimpleLogger::new().init().unwrap();
+    let arrow = r#"("x", "y") -> ("y", "x")"#;
+    let mut tokens = Tokenizer::new(&HiveDialect {}, arrow);
+    let mut parser = Parser::new(tokens.tokenize().unwrap(), &HiveDialect {});
+    let parsed = parser.parse_expr().unwrap();
+    assert_eq!(
+        parsed,
+        Expr::BinaryOp {
+            left: Box::new(Expr::Nested(Box::new(Expr::VarArgs(vec![
+                Ident::with_quote('"', "x"),
+                Ident::with_quote('"', "y")
+            ])))),
+            op: BinaryOperator::Arrow,
+            right: Box::new(Expr::Nested(Box::new(Expr::VarArgs(vec![
+                Ident::with_quote('"', "y"),
+                Ident::with_quote('"', "x")
+            ]))))
+        }
+    );
+    assert_eq!(parser.next_token(), Token::EOF);
+
+    let arrow = r#"SELECT ("x", "y") -> ("y", "x") FROM beepbeep"#;
+    hive().verified_stmt(arrow);
+}
+
+#[test]
+fn test_parse_function_with_fancy_closure_expr() {
+    simple_logger::SimpleLogger::new().init().unwrap();
+    let arrow = r#"map(("x", "y") -> ("y", "x"), "things")"#;
+    let mut tokens = Tokenizer::new(&HiveDialect {}, arrow);
+    let mut parser = Parser::new(tokens.tokenize().unwrap(), &HiveDialect {});
+    let parsed = parser.parse_expr().unwrap();
+
+    let binary_op = Expr::BinaryOp {
+        left: Box::new(Expr::Nested(Box::new(Expr::VarArgs(vec![
+            Ident::with_quote('"', "x"),
+            Ident::with_quote('"', "y"),
+        ])))),
+        op: BinaryOperator::Arrow,
+        right: Box::new(Expr::Nested(Box::new(Expr::VarArgs(vec![
+            Ident::with_quote('"', "y"),
+            Ident::with_quote('"', "x"),
+        ])))),
+    };
+    assert_eq!(
+        parsed,
+        Expr::Function(Function {
+            name: ObjectName(vec![Ident::from("map")]),
+            distinct: false,
+            args: vec![
+                Unnamed(binary_op),
+                Unnamed(Expr::Identifier(Ident::with_quote('"', "things")))
+            ],
+            over: None
+        })
+    );
+    assert_eq!(parser.next_token(), Token::EOF);
+
+    // let arrow = r#"SELECT map(("x", "y") -> ("y", "x"), "things") FROM beepbeep"#;
+    // hive().verified_stmt(arrow);
 }
 
 #[test]
@@ -87,9 +199,15 @@ fn test_complex_join() {
 
 #[test]
 fn test_array_of_maps_query() {
-    simple_logger::SimpleLogger::new().init().unwrap();
+    // simple_logger::SimpleLogger::new().init().unwrap();
     let array_of_maps_query = r#"SELECT CAST("json_parse"("objects") AS ARRAY(MAP(CHARACTER VARYING,CHARACTER VARYING))) AS "new" FROM gouda"#;
     hive().verified_stmt(array_of_maps_query);
+}
+
+#[test]
+fn test_anonymous_function() {
+    let query = r#"SELECT "map_filter"("map"("app", "app"), ("k", "v") -> (("k" = 'Legal Amendments') AND ("v" = 'Denied'))) AS "aliased_table" FROM source_table"#;
+    hive().verified_stmt(query);
 }
 
 #[test]
@@ -100,7 +218,7 @@ fn test_subscript() {
 }
 
 #[test]
-fn test_bad_query() {
+fn test_qualified_wildcard_overlap_with_keyword() {
     let bad_query = r#"SELECT all.* FROM myschema.mytable"#;
     hive().verified_stmt(bad_query);
 }
