@@ -15,7 +15,6 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-use sqlparser::ast::Expr::Cast;
 use sqlparser::ast::FunctionArg::Unnamed;
 use sqlparser::ast::*;
 use sqlparser::dialect::HiveDialect;
@@ -192,17 +191,7 @@ fn test_parse_function_with_fancy_closure_expr() {
 fn test_parse_weird_cast_expr() {
     // simple_logger::SimpleLogger::new().init().unwrap();
 
-    let arrow = r#"
-    SELECT (
-      SELECT
-        CAST("json_parse"("objects") AS array(map(varchar,varchar)))
-      FROM
-        datascience_parquet.events
-      ))
-      FROM datascience_parquet.events
-   "#;
-
-    let arrow = r#"SELECT * FROM (SELECT "id", some_func() FROM datascience_parquet.events)"#;
+    let arrow = r#"SELECT CAST("json_parse"("objects") AS ARRAY(MAP(CHARACTER VARYING,CHARACTER VARYING))) FROM data"#;
 
     hive().verified_stmt(arrow);
 
