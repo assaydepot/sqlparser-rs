@@ -357,34 +357,34 @@ impl<'a> Parser<'a> {
                 Keyword::CASE => {
                     debug!("keyword case");
                     self.parse_case_expr()
-                },
+                }
                 Keyword::CAST => {
                     debug!("keyword cast");
                     self.parse_cast_expr()
-                },
+                }
                 Keyword::EXISTS => {
                     debug!("keyword exists");
                     self.parse_exists_expr()
-                },
+                }
                 Keyword::EXTRACT => {
                     debug!("keyword extract");
                     self.parse_extract_expr()
-                },
+                }
                 Keyword::INTERVAL => {
                     debug!("keyword interval");
                     self.parse_literal_interval()
-                },
+                }
                 Keyword::LISTAGG => {
                     debug!("keyword listagg");
                     self.parse_listagg_expr()
-                },
+                }
                 Keyword::NOT => {
                     debug!("keyword not");
                     Ok(Expr::UnaryOp {
                         op: UnaryOperator::Not,
                         expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                     })
-                },
+                }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => {
@@ -392,23 +392,6 @@ impl<'a> Parser<'a> {
                     let peek_token = self.peek_token();
                     debug!("parse_prefix keyword fallthrough: {:?}", peek_token);
                     match peek_token {
-                        Token::Comma => {
-                            let mut varargs_parts: Vec<Ident> = vec![w.to_ident()];
-                            while self.consume_token(&Token::Comma) {
-                                match self.next_token() {
-                                    Token::Word(w) => varargs_parts.push(w.to_ident()),
-                                    o => debug!("huh: {:?} (varargs_parts: {:?}", o, varargs_parts)
-                                };
-                                debug!("next while whiling: {:?}", self.peek_token());
-                            }
-                            debug!("done whiling, peek: {:?}", self.peek_token());
-
-                            if varargs_parts.len() == 1 {
-                                Ok(Expr::Identifier(varargs_parts.pop().unwrap()))
-                            } else {
-                                Ok(Expr::VarArgs(varargs_parts))
-                            }
-                        },
                         Token::LParen | Token::LBracket | Token::Period => {
                             let mut id_parts: Vec<Ident> = vec![w.to_ident()];
                             let mut ends_with_wildcard = false;
@@ -420,8 +403,10 @@ impl<'a> Parser<'a> {
                                         break;
                                     }
                                     unexpected => {
-                                        return self
-                                            .expected("an identifier or a '*' after '.'", unexpected);
+                                        return self.expected(
+                                            "an identifier or a '*' after '.'",
+                                            unexpected,
+                                        );
                                     }
                                 }
                             }
@@ -436,7 +421,7 @@ impl<'a> Parser<'a> {
                         }
                         _ => Ok(Expr::Identifier(w.to_ident())),
                     }
-                },
+                }
             }, // End of Token::Word
             Token::Mult => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
@@ -463,11 +448,16 @@ impl<'a> Parser<'a> {
                         self.prev_token();
                         Expr::Subquery(Box::new(self.parse_query()?))
                     } else {
-                        Expr::Nested(Box::new(self.parse_expr()?))
+                        let exprs: Vec<Expr> = self.parse_comma_separated(Parser::parse_expr)?;
+                        if exprs.len() == 1 {
+                            Expr::Nested(Box::new(exprs.into_iter().next().unwrap()))
+                        } else {
+                            Expr::Tuple(exprs)
+                        }
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
-            },
+            }
             unexpected => self.expected("an expression:", unexpected),
         }?;
 
@@ -887,7 +877,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::BinaryOp {
             left: Box::new(expr),
             op: BinaryOperator::Subscript,
-            right: Box::new(subscript)
+            right: Box::new(subscript),
         })
     }
 
@@ -981,7 +971,7 @@ impl<'a> Parser<'a> {
             | Token::RParen
             | Token::LParen
             | Token::EOF
-            | Token::Number(_,_)
+            | Token::Number(_, _)
             | Token::Char(_)
             | Token::SingleQuotedString(_)
             | Token::NationalStringLiteral(_)
@@ -995,8 +985,7 @@ impl<'a> Parser<'a> {
             | Token::RBracket
             | Token::LBrace
             | Token::RBrace
-            | Token::RArrow
-            => Ok(0)
+            | Token::RArrow => Ok(0),
         }
     }
 
@@ -1030,8 +1019,7 @@ impl<'a> Parser<'a> {
             | Some(Token::EOF)
             | Some(Token::RParen)
             | Some(Token::Comma)
-            | None
-            => true,
+            | None => true,
             _ => {
                 debug!("token {:?} is not a boundary", token);
                 false
@@ -1047,9 +1035,7 @@ impl<'a> Parser<'a> {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
                 Some(Token::Whitespace(_)) => continue,
-                token => {
-                    return token.cloned().unwrap_or(Token::EOF)
-                },
+                token => return token.cloned().unwrap_or(Token::EOF),
             }
         }
     }
@@ -2006,7 +1992,7 @@ impl<'a> Parser<'a> {
                 Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
-                },
+                }
                 Keyword::ARRAY => {
                     debug!("keyword::array");
                     if self.consume_token(&Token::LParen) {
@@ -2020,7 +2006,7 @@ impl<'a> Parser<'a> {
                     } else {
                         parser_err!("expected (")
                     }
-                },
+                }
                 Keyword::MAP => {
                     if self.consume_token(&Token::LParen) {
                         let first_type = self.parse_data_type()?;
@@ -2037,10 +2023,11 @@ impl<'a> Parser<'a> {
                     } else {
                         parser_err!("expected (")
                     }
-                },
+                }
                 _kw => {
                     self.prev_token();
-                    let mut commas_separated = self.parse_comma_separated(Parser::parse_object_name)?;
+                    let mut commas_separated =
+                        self.parse_comma_separated(Parser::parse_object_name)?;
 
                     if commas_separated.len() == 1 {
                         Ok(DataType::Custom(commas_separated.pop().unwrap()))
