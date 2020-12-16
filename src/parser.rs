@@ -281,18 +281,18 @@ impl<'a> Parser<'a> {
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
 
-        if self.peek_token() == Token::LBracket {
-            expr = self.parse_postfix(expr, 0)?;
-        } else {
-            loop {
-                let next_precedence = self.get_next_precedence()?;
-                debug!("next precedence: {:?}", next_precedence);
-                if precedence >= next_precedence {
-                    break;
-                }
-
-                expr = self.parse_infix(expr, next_precedence)?;
+        loop {
+            if self.peek_token() == Token::LBracket {
+                expr = self.parse_postfix(expr, 0)?;
             }
+
+            let next_precedence = self.get_next_precedence()?;
+            debug!("next precedence: {:?}", next_precedence);
+            if precedence >= next_precedence {
+                break;
+            }
+
+            expr = self.parse_infix(expr, next_precedence)?;
         }
 
         Ok(expr)
@@ -1062,6 +1062,19 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
+        // let slice_size = 5;
+        // let neighbors = if self.index + slice_size <= self.tokens.len() && self.index >= slice_size
+        // {
+        //     &self.tokens[self.index - slice_size..self.index + slice_size]
+        // } else if self.tokens.len() >= slice_size * 2 {
+        //     &self.tokens[self.index - slice_size..self.index]
+        // } else {
+        //     &self.tokens[0..self.index]
+        // };
+        // parser_err!(format!(
+        //     "Expected {}, found: {} (token index: {}, neighbors: {:?})",
+        //     expected, found, self.index, neighbors
+        // ))
         parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 

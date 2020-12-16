@@ -15,6 +15,7 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use sqlparser::ast::Expr::{BinaryOp, CompoundIdentifier};
 use sqlparser::ast::FunctionArg::Unnamed;
 use sqlparser::ast::*;
 use sqlparser::dialect::HiveDialect;
@@ -238,6 +239,29 @@ fn test_anonymous_function() {
     // simple_logger::SimpleLogger::new().init().unwrap();
     let query = r#"SELECT "map_filter"("map"("app", "app"), ("k", "v") -> (("k" = 'Legal Amendments') AND ("v" = 'Denied'))) AS "aliased_table" FROM source_table"#;
     hive().verified_stmt(query);
+}
+
+#[test]
+fn test_compound_postfix_expr() {
+    let expr = r#"publishedAPP[1] = false"#;
+    let mut tokens = Tokenizer::new(&HiveDialect {}, expr);
+    let mut parser = Parser::new(tokens.tokenize().unwrap(), &HiveDialect {});
+    let parsed = parser.parse_select_item().unwrap();
+    assert_eq!(
+        parsed,
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(BinaryOp {
+                left: Box::new(CompoundIdentifier(vec![Ident::from("publishedAPP")])),
+                op: BinaryOperator::Subscript,
+                right: Box::new(Expr::Value(Value::Number("1".to_string(), false)))
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::Boolean(false)))
+        })
+    );
+
+    let expr = r#"SELECT publishedAPP[1] = false FROM data"#;
+    hive().verified_query(expr);
 }
 
 #[test]
