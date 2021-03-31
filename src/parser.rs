@@ -1062,20 +1062,20 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
-        // let slice_size = 5;
-        // let neighbors = if self.index + slice_size <= self.tokens.len() && self.index >= slice_size
-        // {
-        //     &self.tokens[self.index - slice_size..self.index + slice_size]
-        // } else if self.tokens.len() >= slice_size * 2 {
-        //     &self.tokens[self.index - slice_size..self.index]
-        // } else {
-        //     &self.tokens[0..self.index]
-        // };
-        // parser_err!(format!(
-        //     "Expected {}, found: {} (token index: {}, neighbors: {:?})",
-        //     expected, found, self.index, neighbors
-        // ))
-        parser_err!(format!("Expected {}, found: {}", expected, found))
+        let slice_size = 5;
+        let neighbors = if self.index + slice_size <= self.tokens.len() && self.index >= slice_size
+        {
+            &self.tokens[self.index - slice_size..self.index + slice_size]
+        } else if self.tokens.len() >= slice_size * 2 {
+            &self.tokens[self.index - slice_size..self.index]
+        } else {
+            &self.tokens[0..self.index]
+        };
+        parser_err!(format!(
+            "Expected {}, found: {} (token index: {}, neighbors: {:?})",
+            expected, found, self.index, neighbors
+        ))
+        // parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 
     /// Look for an expected keyword and consume it if it exists.
